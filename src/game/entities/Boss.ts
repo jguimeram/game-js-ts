@@ -11,6 +11,7 @@ export enum BossState {
   TELEGRAPH = 'TELEGRAPH',
   SURGE = 'SURGE',
   STAGING = 'STAGING',
+  DYING = 'DYING',
 }
 
 export class Boss extends Entity {
@@ -32,8 +33,10 @@ export class Boss extends Entity {
   public targetPos: Vector;
   public telegraphColor: string = 'white';
   private pendingAttack: string = '';
+  public isFullyDestroyed: boolean = false;
 
   public takeDamage(amount: number): void {
+    if (this.state === BossState.DYING) return;
     this.health = Math.max(0, this.health - amount);
     this.blinkFrames = 0.05;
   }
@@ -53,14 +56,23 @@ export class Boss extends Entity {
     canvasWidth: number,
     canvasHeight: number
   ): void {
+    if (this.health <= 0 && this.state !== BossState.DYING) {
+      this.state = BossState.DYING;
+      this.stateTimer = 2.0;
+      this.bullets = [];
+      this.missiles = [];
+    }
+
     this.time += dt;
-    this.updatePhase(particles, camera);
-    this.checkHealthThresholds();
+    if (this.state !== BossState.DYING) {
+      this.updatePhase(particles, camera);
+      this.checkHealthThresholds();
+    }
 
     const hpPercent = this.health / this.maxHealth;
     const isLastStand = hpPercent <= 0.25;
 
-    if (this.state !== BossState.SURGE && (this.state !== BossState.STAGING || isLastStand)) {
+    if (this.state !== BossState.SURGE && this.state !== BossState.DYING && (this.state !== BossState.STAGING || isLastStand)) {
       const hoverX = Math.sin(this.time * 0.7) * (this.phase === 3 ? 400 : 200);
       const hoverY = Math.cos(this.time * 1.1) * 60;
       this.targetPos.x = canvasWidth / 2 + hoverX;
@@ -123,6 +135,28 @@ export class Boss extends Entity {
             }
           }
           break;
+      case BossState.DYING:
+        this.stateTimer -= dt;
+        this.blinkFrames = 0.05;
+        this.scale.x = 1 + Math.sin(this.time * 30) * 0.2;
+        this.scale.y = 1 + Math.cos(this.time * 30) * 0.2;
+        
+        if (Math.random() > 0.7) {
+          const offset = new Vector(
+            (Math.random() - 0.5) * this.radius * 2,
+            (Math.random() - 0.5) * this.radius * 2
+          );
+          particles.emit(Vector.add(this.pos, offset), 'white', 5, [50, 150]);
+          camera.shake(2);
+        }
+
+        if (this.stateTimer <= 0) {
+          this.isFullyDestroyed = true;
+          particles.emit(this.pos, '#ff4dff', 100, [100, 800]);
+          camera.shake(30);
+          camera.flash = 0.8;
+        }
+        break;
     }
 
     this.scale.x += (1 - this.scale.x) * 5 * dt;
@@ -236,6 +270,7 @@ export class Boss extends Entity {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    if (this.isFullyDestroyed) return;
     const hpPercent = this.health / this.maxHealth;
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
@@ -267,6 +302,17 @@ export class Boss extends Entity {
     }
 
     ctx.scale(this.scale.x, this.scale.y);
+    
+    // Blinking effect logic
+    if (this.state === BossState.DYING) {
+        if (Math.floor(this.time * 20) % 2 === 0) {
+            ctx.restore();
+            this.bullets.forEach((b) => b.draw(ctx));
+            this.missiles.forEach((m) => m.draw(ctx));
+            return;
+        }
+    }
+
     ctx.beginPath();
     ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
 

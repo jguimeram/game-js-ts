@@ -1,6 +1,7 @@
 import { Vector } from '../../engine/Vector';
 import { Entity } from './Entity';
 import { Bullet } from './Bullet';
+import { MagicSpell } from './MagicSpell';
 import { ParticleSystem } from '../../engine/ParticleSystem';
 import { Camera } from '../../engine/Camera';
 
@@ -14,14 +15,17 @@ export class Player extends Entity {
   public lifespan: number = 100;
   public maxLifespan: number = 100;
   public bullets: Bullet[] = [];
+  public magicSpells: MagicSpell[] = [];
   public shootCooldown: number = 0;
   public blinkFrames: number = 0;
   public scale: Vector = new Vector(1, 1);
 
-  public activeSkill: number = 1; // 1: Strike, 2: Repair
+  public activeSkill: number = 1; // 1: Strike, 2: Magic, 3: Repair
   public isHealing: boolean = false;
   public healingCooldown: number = 0;
   public maxHealingCooldown: number = 15;
+  public magicSkillCooldown: number = 0;
+  public maxMagicSkillCooldown: number = 10;
   private healingTicks: number = 0;
   private healingTimer: number = 0;
 
@@ -101,8 +105,8 @@ export class Player extends Entity {
     if (this.dashIFrame > 0) this.dashIFrame -= dt;
     if (this.blinkFrames > 0) this.blinkFrames -= dt;
 
-    // Healing logic
-    if (this.activeSkill === 2 && this.lifespan < this.maxLifespan && this.healingCooldown <= 0) {
+    // Healing logic (Skill 3)
+    if (this.activeSkill === 3 && this.lifespan < this.maxLifespan && this.healingCooldown <= 0) {
       this.isHealing = true;
       this.healingTimer += dt;
       if (this.healingTimer >= 0.5 && this.healingTicks < 10) {
@@ -125,6 +129,10 @@ export class Player extends Entity {
         this.healingCooldown -= dt;
     }
 
+    if (this.magicSkillCooldown > 0) {
+        this.magicSkillCooldown -= dt;
+    }
+
     // Boundary checks
     if (this.pos.x < this.radius) {
       this.pos.x = this.radius;
@@ -143,17 +151,31 @@ export class Player extends Entity {
       this.vel.y *= -0.5;
     }
 
-    if (keys['Space'] && this.shootCooldown <= 0 && this.activeSkill === 1) {
-      const dir = Vector.sub(mousePos, this.pos).normalize();
-      this.bullets.push(
-        new Bullet(
-          this.pos.copy().add(dir.copy().mult(this.radius)),
-          dir.mult(1000)
-        )
-      );
-      this.shootCooldown = 0.12;
-      this.scale.y = 1.4;
-      this.scale.x = 0.8;
+    if (keys['Space'] && this.shootCooldown <= 0) {
+      if (this.activeSkill === 1) {
+        const dir = Vector.sub(mousePos, this.pos).normalize();
+        this.bullets.push(
+          new Bullet(
+            this.pos.copy().add(dir.copy().mult(this.radius)),
+            dir.mult(1000)
+          )
+        );
+        this.shootCooldown = 0.12;
+        this.scale.y = 1.4;
+        this.scale.x = 0.8;
+      } else if (this.activeSkill === 2 && this.magicSkillCooldown <= 0) {
+        const dir = Vector.sub(mousePos, this.pos).normalize();
+        this.magicSpells.push(
+          new MagicSpell(
+            this.pos.copy().add(dir.copy().mult(this.radius)),
+            dir.mult(600)
+          )
+        );
+        this.magicSkillCooldown = this.maxMagicSkillCooldown;
+        this.shootCooldown = 0.3;
+        this.scale.y = 1.6;
+        this.scale.x = 0.6;
+      }
     }
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
 
@@ -171,6 +193,20 @@ export class Player extends Entity {
         b.pos.y > canvasHeight + 100
       ) {
         this.bullets.splice(i, 1);
+      }
+    }
+
+    for (let i = this.magicSpells.length - 1; i >= 0; i--) {
+      const ms = this.magicSpells[i];
+      if (!ms) continue;
+      ms.update(dt);
+      if (
+        ms.pos.x < -100 ||
+        ms.pos.x > canvasWidth + 100 ||
+        ms.pos.y < -100 ||
+        ms.pos.y > canvasHeight + 100
+      ) {
+        this.magicSpells.splice(i, 1);
       }
     }
 
@@ -205,5 +241,6 @@ export class Player extends Entity {
     ctx.restore();
 
     this.bullets.forEach((b) => b.draw(ctx));
+    this.magicSpells.forEach((ms) => ms.draw(ctx));
   }
 }

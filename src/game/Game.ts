@@ -38,6 +38,9 @@ export class Game {
   private skill2El: HTMLElement;
   private skill2CooldownEl: HTMLElement;
   private skill2CooldownTimerEl: HTMLElement;
+  private skill3El: HTMLElement;
+  private skill3CooldownEl: HTMLElement;
+  private skill3CooldownTimerEl: HTMLElement;
 
   private debug = {
     enabled: false,
@@ -67,6 +70,9 @@ export class Game {
     this.skill2El = document.getElementById('skill-2')!;
     this.skill2CooldownEl = this.skill2El.querySelector('.cooldown-overlay')!;
     this.skill2CooldownTimerEl = this.skill2El.querySelector('.cooldown-timer')!;
+    this.skill3El = document.getElementById('skill-3')!;
+    this.skill3CooldownEl = this.skill3El.querySelector('.cooldown-overlay')!;
+    this.skill3CooldownTimerEl = this.skill3El.querySelector('.cooldown-timer')!;
 
     const resetBtn = document.getElementById('btn-reset');
     resetBtn?.addEventListener('click', () => this.resetToMenu());
@@ -100,8 +106,9 @@ export class Game {
         this.player.dash(this.keys, this.camera);
       }
       if (e.code === 'Digit1') this.player.activeSkill = 1;
-      if (e.code === 'Digit2') {
-          this.player.activeSkill = 2;
+      if (e.code === 'Digit2') this.player.activeSkill = 2;
+      if (e.code === 'Digit3') {
+          this.player.activeSkill = 3;
           // Reset healing progress when switching back to heal
           (this.player as any).healingTicks = 0; 
       }
@@ -121,7 +128,7 @@ export class Game {
   }
 
   private handleDebugInput(code: string): void {
-    if (code === 'Backquote') {
+    if (code === 'KeyL') {
       this.debug.enabled = !this.debug.enabled;
     }
 
@@ -162,7 +169,7 @@ export class Game {
       ---
       [G] God Mode | [H] Hitboxes
       [T] Time Scale | [K] Dmg Boss
-      [\`] Toggle Debug
+      [L] Toggle Debug
     `;
   }
 
@@ -200,53 +207,14 @@ export class Game {
   }
 
   private update(dt: number, dtReal: number): void {
-    const isGameOver = (this.player.lifespan <= 0 && !this.debug.godMode) || this.boss.health <= 0;
+    const isGameOver = (this.player.lifespan <= 0 && !this.debug.godMode) || this.boss.isFullyDestroyed;
 
     if (!isGameOver) {
       this.gameTime += dtReal;
-      this.player.update(
-        dt,
-        this.keys,
-        this.mousePos,
-        this.particles,
-        this.canvas.width,
-        this.canvas.height
-      );
-      this.boss.update(
-        dt,
-        this.particles,
-        this.camera,
-        this.canvas.width,
-        this.canvas.height
-      );
-
-      // Minion staging logic
-      if (this.boss.state === BossState.STAGING && !this.minionsSpawnedForCurrentThreshold) {
-        console.log("Boss entered STAGING state");
-        for (let i = 0; i < 3; i++) {
-          const x = Math.random() * this.canvas.width;
-          const y = 100 + Math.random() * (this.canvas.height / 2);
-          this.minions.push(new Minion(new Vector(x, y), this.player));
-          this.particles.emit(new Vector(x, y), '#7a4dff', 10);
-        }
-        this.minionsSpawnedForCurrentThreshold = true;
-      }
-
-      for (let i = this.minions.length - 1; i >= 0; i--) {
-        const m = this.minions[i];
-        m.update(dt, this.particles, this.canvas.width, this.canvas.height);
-
-        if (m.health <= 0) {
-          this.particles.emit(m.pos, '#7a4dff', 20);
-          this.minions.splice(i, 1);
-          if (this.minions.length === 0) {
-            this.boss.state = BossState.IDLE;
-            this.minionsSpawnedForCurrentThreshold = false;
-          }
-        }
-      }
-
-      // Environmental hazards (Environmental hazards spawn if boss health <= 50%)
+      this.updateCameraZoom();
+      this.checkCollisions(dtReal);
+      
+      // Environmental hazards
       if (this.boss.health <= this.boss.maxHealth * 0.5) {
         this.environmentalHazardTimer += dt;
         if (this.environmentalHazardTimer >= 3.0) {
@@ -254,17 +222,64 @@ export class Game {
           this.environmentalHazardTimer = 0;
         }
       }
+    } else {
+      this.showGameOver();
+    }
 
-      for (let i = this.damageAreas.length - 1; i >= 0; i--) {
-        const da = this.damageAreas[i];
-        da.update(dt, this.particles);
-        if (da.isDone) {
-          this.damageAreas.splice(i, 1);
+    // Keep entities and systems updating so animations/particles don't freeze
+    const updateDt = isGameOver ? 0 : dt; // Stop movement but keep time? 
+    // Wait, if I use 0, animations using dt stop. 
+    // I will use dt for animations but handle movement/actions inside entities or here.
+    
+    // Better: let the entities update, but if game is over, they don't take input/attack
+    this.player.update(
+      isGameOver ? dt * 0.1 : dt, // Slow motion effect on game over? Or just dt.
+      isGameOver ? {} : this.keys, // No keys = no movement
+      this.mousePos,
+      this.particles,
+      this.canvas.width,
+      this.canvas.height
+    );
+
+    this.boss.update(
+      dt,
+      this.particles,
+      this.camera,
+      this.canvas.width,
+      this.canvas.height
+    );
+
+    // Minion staging logic
+    if (!isGameOver && this.boss.state === BossState.STAGING && !this.minionsSpawnedForCurrentThreshold) {
+      for (let i = 0; i < 3; i++) {
+        const x = Math.random() * this.canvas.width;
+        const y = 100 + Math.random() * (this.canvas.height / 2);
+        this.minions.push(new Minion(new Vector(x, y), this.player));
+        this.particles.emit(new Vector(x, y), '#7a4dff', 10);
+      }
+      this.minionsSpawnedForCurrentThreshold = true;
+    }
+
+    for (let i = this.minions.length - 1; i >= 0; i--) {
+      const m = this.minions[i];
+      m.update(isGameOver ? 0 : dt, this.particles, this.canvas.width, this.canvas.height);
+
+      if (m.health <= 0) {
+        this.particles.emit(m.pos, '#7a4dff', 20);
+        this.minions.splice(i, 1);
+        if (this.minions.length === 0) {
+          this.boss.state = BossState.IDLE;
+          this.minionsSpawnedForCurrentThreshold = false;
         }
       }
-      
-      this.updateCameraZoom();
-      this.checkCollisions(dtReal);
+    }
+
+    for (let i = this.damageAreas.length - 1; i >= 0; i--) {
+      const da = this.damageAreas[i];
+      da.update(isGameOver ? 0 : dt, this.particles);
+      if (da.isDone) {
+        this.damageAreas.splice(i, 1);
+      }
     }
 
     this.particles.update(dt);
@@ -311,6 +326,37 @@ export class Game {
             this.particles.emit(b.pos, '#7a4dff', 5);
             this.damageNumbers.push(new DamageNumber(b.pos, '25', '#7a4dff', 24));
             this.player.bullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // Player magic spells -> Boss/Minions
+    for (let i = this.player.magicSpells.length - 1; i >= 0; i--) {
+      const ms = this.player.magicSpells[i];
+      if (!ms) continue;
+      if (this.boss.state !== BossState.STAGING && ms.checkCollision(this.boss)) {
+        const damage = ms.damage;
+        this.boss.takeDamage(damage);
+        this.totalDamageDealt += damage;
+        this.boss.scale.x = 1.3;
+        this.boss.scale.y = 0.7;
+        this.particles.emit(ms.pos, '#ff4dff', 20);
+        this.damageNumbers.push(new DamageNumber(ms.pos, damage.toString(), '#ff4dff', 48));
+        this.player.magicSpells.splice(i, 1);
+        this.camera.shake(10);
+      } else {
+        for (let j = this.minions.length - 1; j >= 0; j--) {
+          const m = this.minions[j];
+          if (ms.checkCollision(m)) {
+            const damage = ms.damage;
+            m.health -= damage;
+            this.totalDamageDealt += damage;
+            m.blinkFrames = 0.05;
+            this.particles.emit(ms.pos, '#ff4dff', 15);
+            this.damageNumbers.push(new DamageNumber(ms.pos, damage.toString(), '#ff4dff', 32));
+            this.player.magicSpells.splice(i, 1);
             break;
           }
         }
@@ -381,8 +427,6 @@ export class Game {
           this.camera.shake(5);
         }
       }
-    } else {
-      this.showGameOver();
     }
   }
 
@@ -412,18 +456,27 @@ export class Game {
     
     if (this.player.isHealing) {
         this.lifespanBarEl.classList.add('healing');
-        this.skill2El.classList.add('healing');
+        this.skill3El.classList.add('healing');
     } else {
         this.lifespanBarEl.classList.remove('healing');
-        this.skill2El.classList.remove('healing');
+        this.skill3El.classList.remove('healing');
     }
 
     this.skill1El.classList.toggle('active', this.player.activeSkill === 1);
     this.skill2El.classList.toggle('active', this.player.activeSkill === 2);
+    this.skill3El.classList.toggle('active', this.player.activeSkill === 3);
 
-    const cdPercent = (this.player.healingCooldown / this.player.maxHealingCooldown) * 100;
-    this.skill2CooldownEl.style.height = `${cdPercent}%`;
-    this.skill2CooldownTimerEl.textContent = this.player.healingCooldown > 0 
+    // Skill 2 (Magic) Cooldown
+    const magicCdPercent = (this.player.magicSkillCooldown / this.player.maxMagicSkillCooldown) * 100;
+    this.skill2CooldownEl.style.height = `${magicCdPercent}%`;
+    this.skill2CooldownTimerEl.textContent = this.player.magicSkillCooldown > 0 
+        ? Math.ceil(this.player.magicSkillCooldown).toString() 
+        : '';
+
+    // Skill 3 (Repair) Cooldown
+    const repairCdPercent = (this.player.healingCooldown / this.player.maxHealingCooldown) * 100;
+    this.skill3CooldownEl.style.height = `${repairCdPercent}%`;
+    this.skill3CooldownTimerEl.textContent = this.player.healingCooldown > 0 
         ? Math.ceil(this.player.healingCooldown).toString() 
         : '';
 

@@ -118,7 +118,7 @@ body {
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.2);
 }
 
-#skill-2.active.healing {
+#skill-3.active.healing {
     border-color: #00ff00;
     color: #00ff00;
     background: rgba(0, 255, 0, 0.1);
