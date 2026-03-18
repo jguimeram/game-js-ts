@@ -11,6 +11,18 @@
         <div class="stat">Lifespan: <div id="lifespan-container"><div id="lifespan-bar"></div></div></div>
         <div class="stat">Boss Health: <span id="boss-health">1000</span></div>
     </div>
+    <div id="debug-tooltip"></div>
+    <div id="menu-overlay">
+        <div id="menu-box">
+            <h1>STRIKER v1.0</h1>
+            <p>Select Operation Mode</p>
+            <button id="btn-game" class="menu-btn">GAME MODE</button>
+            <button id="btn-debug" class="menu-btn secondary">DEBUG MODE</button>
+            <div class="controls">
+                WASD to Move | MOUSE to Aim | SPACE to Shoot | SHIFT to Dash
+            </div>
+        </div>
+    </div>
     <canvas id="gameCanvas"></canvas>
     <script type="module" src="/src/main.ts"></script>
 </body>

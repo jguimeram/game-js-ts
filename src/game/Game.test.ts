@@ -33,7 +33,7 @@ describe('Game Initialization and Logic', () => {
       closePath: vi.fn(),
     });
 
-    game = new Game();
+    game = new Game(true);
   });
 
   // Functional Tests

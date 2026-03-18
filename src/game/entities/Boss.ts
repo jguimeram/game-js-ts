@@ -32,6 +32,11 @@ export class Boss extends Entity {
   public telegraphColor: string = 'white';
   private pendingAttack: string = '';
 
+  public takeDamage(amount: number): void {
+    this.health = Math.max(0, this.health - amount);
+    this.blinkFrames = 0.05;
+  }
+
   constructor(
     private player: Player,
     canvasWidth: number
@@ -68,6 +73,12 @@ export class Boss extends Entity {
       this.targetPos.y = 150;
       this.pos.x += (this.targetPos.x - this.pos.x) * 2 * dt;
       this.pos.y += (this.targetPos.y - this.pos.y) * 2 * dt;
+    }
+
+    // Safety check to prevent disappearance
+    if (isNaN(this.pos.x) || isNaN(this.pos.y)) {
+      this.pos.x = canvasWidth / 2;
+      this.pos.y = 200;
     }
 
     if (this.blinkFrames > 0) this.blinkFrames -= dt;
@@ -223,6 +234,7 @@ export class Boss extends Entity {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    const hpPercent = this.health / this.maxHealth;
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
 
