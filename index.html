@@ -10,8 +10,31 @@
     <div id="hud">
         <div class="stat">Lifespan: <div id="lifespan-container"><div id="lifespan-bar"></div></div></div>
         <div class="stat">Boss Health: <span id="boss-health">1000</span></div>
+        <div class="stat">Time: <span id="game-timer">00:00</span></div>
+    </div>
+    <div id="skills-hud">
+        <div id="skill-1" class="skill-slot active">
+            <span class="key">1</span> STRIKE
+            <div class="cooldown-overlay"></div>
+        </div>
+        <div id="skill-2" class="skill-slot">
+            <span class="key">2</span> REPAIR
+            <div class="cooldown-overlay"></div>
+            <span class="cooldown-timer"></span>
+        </div>
     </div>
     <div id="debug-tooltip"></div>
+    <div id="game-over-overlay" style="display: none;">
+        <div id="game-over-box">
+            <h1 id="game-over-title">MISSION FAILED</h1>
+            <div id="game-over-stats-container">
+                <p id="stat-time">TIME: 00:00</p>
+                <p id="stat-lifespan">REMAINING LIFESPAN: 0%</p>
+                <p id="stat-damage">TOTAL DAMAGE DEALT: 0</p>
+            </div>
+            <button id="btn-reset" class="menu-btn">RETURN TO MENU</button>
+        </div>
+    </div>
     <div id="menu-overlay">
         <div id="menu-box">
             <h1>STRIKER v1.0</h1>

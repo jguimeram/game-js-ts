@@ -6,6 +6,7 @@ import { Player } from './Player';
 
 export class Minion extends Entity {
   public health: number = 50;
+  public maxHealth: number = 50;
   public vel: Vector = new Vector(0, 0);
   public speed: number = 150;
   public shootTimer: number = Math.random() * 2;
@@ -64,6 +65,17 @@ export class Minion extends Entity {
     ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
     ctx.fillStyle = '#050505';
     ctx.fill();
+
+    // Health Bar
+    const barWidth = 40;
+    const barHeight = 4;
+    const healthPercent = Math.max(0, this.health / this.maxHealth);
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(-barWidth / 2, -this.radius - 15, barWidth, barHeight);
+    
+    ctx.fillStyle = '#7a4dff';
+    ctx.fillRect(-barWidth / 2, -this.radius - 15, barWidth * healthPercent, barHeight);
     
     ctx.restore();
     

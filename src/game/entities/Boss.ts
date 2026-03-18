@@ -28,6 +28,7 @@ export class Boss extends Entity {
 
   public state: BossState = BossState.IDLE;
   public stateTimer: number = 0;
+  public maxStateTimer: number = 0;
   public targetPos: Vector;
   public telegraphColor: string = 'white';
   private pendingAttack: string = '';
@@ -181,6 +182,7 @@ export class Boss extends Entity {
   startTelegraph(duration: number, color: string, type: string): void {
     this.state = BossState.TELEGRAPH;
     this.stateTimer = duration;
+    this.maxStateTimer = duration;
     this.telegraphColor = color;
     this.pendingAttack = type;
   }
@@ -283,6 +285,26 @@ export class Boss extends Entity {
     ctx.strokeStyle = bodyColor;
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Cast Bar
+    if (this.state === BossState.TELEGRAPH) {
+      const barWidth = 120;
+      const barHeight = 8;
+      const progress = 1 - (this.stateTimer / this.maxStateTimer);
+      
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(-barWidth / 2, -this.radius - 40, barWidth, barHeight);
+      
+      ctx.fillStyle = this.telegraphColor;
+      ctx.fillRect(-barWidth / 2, -this.radius - 40, barWidth * progress, barHeight);
+      
+      // Label
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 12px "Courier New"';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.pendingAttack, 0, -this.radius - 45);
+    }
+
     ctx.restore();
 
     this.bullets.forEach((b) => b.draw(ctx));

@@ -5,13 +5,20 @@ import { ParticleSystem } from '../engine/ParticleSystem';
 import { Camera } from '../engine/Camera';
 import { DamageNumber } from '../engine/DamageNumber';
 import { Vector } from '../engine/Vector';
+import { DamageArea } from './entities/DamageArea';
 
 export class Game {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private lifespanBarEl: HTMLElement;
   private bossHealthEl: HTMLElement;
+  private timerEl: HTMLElement;
   private debugTooltipEl: HTMLElement;
+  private gameOverOverlayEl: HTMLElement;
+  private gameOverTitleEl: HTMLElement;
+  private statTimeEl: HTMLElement;
+  private statLifespanEl: HTMLElement;
+  private statDamageEl: HTMLElement;
 
   private player: Player;
   private boss: Boss;
@@ -19,8 +26,18 @@ export class Game {
   private particles: ParticleSystem;
   private camera: Camera;
   private damageNumbers: DamageNumber[] = [];
+  private damageAreas: DamageArea[] = [];
   private minionsSpawnedForCurrentThreshold: boolean = false;
   private mousePos: Vector = new Vector(0, 0);
+  private environmentalHazardTimer: number = 0;
+  private gameTime: number = 0;
+  private totalDamageDealt: number = 0;
+  private gameRunning: boolean = false;
+
+  private skill1El: HTMLElement;
+  private skill2El: HTMLElement;
+  private skill2CooldownEl: HTMLElement;
+  private skill2CooldownTimerEl: HTMLElement;
 
   private debug = {
     enabled: false,
@@ -38,7 +55,21 @@ export class Game {
     this.ctx = this.canvas.getContext('2d')!;
     this.lifespanBarEl = document.getElementById('lifespan-bar')!;
     this.bossHealthEl = document.getElementById('boss-health')!;
+    this.timerEl = document.getElementById('game-timer')!;
     this.debugTooltipEl = document.getElementById('debug-tooltip')!;
+    this.gameOverOverlayEl = document.getElementById('game-over-overlay')!;
+    this.gameOverTitleEl = document.getElementById('game-over-title')!;
+    this.statTimeEl = document.getElementById('stat-time')!;
+    this.statLifespanEl = document.getElementById('stat-lifespan')!;
+    this.statDamageEl = document.getElementById('stat-damage')!;
+
+    this.skill1El = document.getElementById('skill-1')!;
+    this.skill2El = document.getElementById('skill-2')!;
+    this.skill2CooldownEl = this.skill2El.querySelector('.cooldown-overlay')!;
+    this.skill2CooldownTimerEl = this.skill2El.querySelector('.cooldown-timer')!;
+
+    const resetBtn = document.getElementById('btn-reset');
+    resetBtn?.addEventListener('click', () => this.resetToMenu());
 
     this.debug.enabled = debugEnabled;
     this.updateDebugTooltip();
@@ -55,11 +86,24 @@ export class Game {
     this.initInput();
   }
 
+  private resetToMenu(): void {
+    this.gameRunning = false;
+    this.gameOverOverlayEl.style.display = 'none';
+    const menu = document.getElementById('menu-overlay');
+    if (menu) menu.style.display = 'flex';
+  }
+
   private initInput(): void {
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
       if (e.code === 'ShiftLeft') {
         this.player.dash(this.keys, this.camera);
+      }
+      if (e.code === 'Digit1') this.player.activeSkill = 1;
+      if (e.code === 'Digit2') {
+          this.player.activeSkill = 2;
+          // Reset healing progress when switching back to heal
+          (this.player as any).healingTicks = 0; 
       }
       this.handleDebugInput(e.code);
     });
@@ -129,10 +173,16 @@ export class Game {
 
   public start(): void {
     this.lastTime = 0;
+    this.gameTime = 0;
+    this.totalDamageDealt = 0;
+    this.gameRunning = true;
+    this.gameOverOverlayEl.style.display = 'none';
+    this.gameOverOverlayEl.classList.remove('active'); // In case you add transitions
     requestAnimationFrame((t) => this.loop(t));
   }
 
   private loop(timestamp: number): void {
+    if (!this.gameRunning) return;
     if (!this.lastTime) this.lastTime = timestamp;
     const dtReal = Math.min((timestamp - this.lastTime) / 1000, 0.1);
     this.lastTime = timestamp;
@@ -153,6 +203,7 @@ export class Game {
     const isGameOver = (this.player.lifespan <= 0 && !this.debug.godMode) || this.boss.health <= 0;
 
     if (!isGameOver) {
+      this.gameTime += dtReal;
       this.player.update(
         dt,
         this.keys,
@@ -194,6 +245,23 @@ export class Game {
           }
         }
       }
+
+      // Environmental hazards (Environmental hazards spawn if boss health <= 50%)
+      if (this.boss.health <= this.boss.maxHealth * 0.5) {
+        this.environmentalHazardTimer += dt;
+        if (this.environmentalHazardTimer >= 3.0) {
+          this.damageAreas.push(new DamageArea(this.player.pos.copy(), this.player.radius * 3));
+          this.environmentalHazardTimer = 0;
+        }
+      }
+
+      for (let i = this.damageAreas.length - 1; i >= 0; i--) {
+        const da = this.damageAreas[i];
+        da.update(dt, this.particles);
+        if (da.isDone) {
+          this.damageAreas.splice(i, 1);
+        }
+      }
       
       this.updateCameraZoom();
       this.checkCollisions(dtReal);
@@ -222,7 +290,9 @@ export class Game {
       const b = this.player.bullets[i];
       if (!b) continue;
       if (this.boss.state !== BossState.STAGING && b.checkCollision(this.boss)) {
-        this.boss.takeDamage(8);
+        const damage = 8;
+        this.boss.takeDamage(damage);
+        this.totalDamageDealt += damage;
         this.boss.scale.x = 1.1;
         this.boss.scale.y = 0.9;
         this.particles.emit(b.pos, 'white', 5);
@@ -234,7 +304,9 @@ export class Game {
         for (let j = this.minions.length - 1; j >= 0; j--) {
           const m = this.minions[j];
           if (b.checkCollision(m)) {
-            m.health -= 25;
+            const damage = 25;
+            m.health -= damage;
+            this.totalDamageDealt += damage;
             m.blinkFrames = 0.05;
             this.particles.emit(b.pos, '#7a4dff', 5);
             this.damageNumbers.push(new DamageNumber(b.pos, '25', '#7a4dff', 24));
@@ -290,6 +362,18 @@ export class Game {
         }
       }
 
+      // Damage areas -> Player
+      for (const da of this.damageAreas) {
+        if (da.isActive() && !da.hasDealtDamage && da.checkCollision(this.player)) {
+          this.player.lifespan -= 20;
+          this.player.blinkFrames = 0.5;
+          this.particles.emit(this.player.pos, '#ff4d4d', 20);
+          this.damageNumbers.push(new DamageNumber(this.player.pos, '20', '#ff4d4d', 32));
+          this.camera.shake(10);
+          da.hasDealtDamage = true;
+        }
+      }
+
       if (this.player.checkCollision(this.boss)) {
         this.player.lifespan -= 30 * dtReal;
         if (this.player.blinkFrames <= 0) {
@@ -297,12 +381,52 @@ export class Game {
           this.camera.shake(5);
         }
       }
+    } else {
+      this.showGameOver();
     }
+  }
+
+  private showGameOver(): void {
+    if (this.gameOverOverlayEl.style.display === 'flex') return;
+    
+    this.gameOverOverlayEl.style.display = 'flex';
+    const isWin = this.boss.health <= 0;
+    this.gameOverTitleEl.textContent = isWin ? 'TARGET ELIMINATED' : 'MISSION FAILED';
+    this.gameOverTitleEl.style.color = isWin ? '#ff4dff' : '#ff4d4d';
+    
+    this.statTimeEl.textContent = `TIME: ${this.formatTime(this.gameTime)}`;
+    const lifespanPercent = Math.max(0, Math.floor((this.player.lifespan / this.player.maxLifespan) * 100));
+    this.statLifespanEl.textContent = `REMAINING LIFESPAN: ${lifespanPercent}%`;
+    this.statDamageEl.textContent = `TOTAL DAMAGE DEALT: ${Math.floor(this.totalDamageDealt)}`;
+  }
+
+  private formatTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
   private updateHUD(): void {
     const lifespanPercent = this.debug.godMode ? 100 : (this.player.lifespan / this.player.maxLifespan) * 100;
     this.lifespanBarEl.style.width = Math.max(0, lifespanPercent) + '%';
+    
+    if (this.player.isHealing) {
+        this.lifespanBarEl.classList.add('healing');
+        this.skill2El.classList.add('healing');
+    } else {
+        this.lifespanBarEl.classList.remove('healing');
+        this.skill2El.classList.remove('healing');
+    }
+
+    this.skill1El.classList.toggle('active', this.player.activeSkill === 1);
+    this.skill2El.classList.toggle('active', this.player.activeSkill === 2);
+
+    const cdPercent = (this.player.healingCooldown / this.player.maxHealingCooldown) * 100;
+    this.skill2CooldownEl.style.height = `${cdPercent}%`;
+    this.skill2CooldownTimerEl.textContent = this.player.healingCooldown > 0 
+        ? Math.ceil(this.player.healingCooldown).toString() 
+        : '';
+
     this.bossHealthEl.textContent = Math.max(
       0,
       Math.floor(this.boss.health)
@@ -313,6 +437,8 @@ export class Game {
         : this.boss.phase === 2
           ? '#7a4dff'
           : '#4d4dff';
+
+    this.timerEl.textContent = this.formatTime(this.gameTime);
   }
 
   private draw(): void {
@@ -323,6 +449,7 @@ export class Game {
     this.camera.apply(this.ctx, this.canvas.width, this.canvas.height);
 
     this.particles.draw(this.ctx);
+    this.damageAreas.forEach((da) => da.draw(this.ctx));
     this.player.draw(this.ctx);
     this.boss.draw(this.ctx);
     this.minions.forEach((m) => m.draw(this.ctx));
@@ -339,7 +466,6 @@ export class Game {
     this.camera.drawFlash(this.ctx, this.canvas.width, this.canvas.height);
 
     this.drawDashUI();
-    this.drawGameOver();
   }
 
   private drawDashUI(): void {
@@ -356,28 +482,6 @@ export class Game {
       this.ctx.font = '12px Courier New';
       this.ctx.fillStyle = 'white';
       this.ctx.fillText('DASH READY', 20, this.canvas.height - 45);
-    }
-  }
-
-  private drawGameOver(): void {
-    if (this.player.lifespan <= 0 && !this.debug.godMode) {
-      this.ctx.fillStyle = 'white';
-      this.ctx.font = 'bold 64px Courier New';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText(
-        'MISSION FAILED',
-        this.canvas.width / 2,
-        this.canvas.height / 2
-      );
-    } else if (this.boss.health <= 0) {
-      this.ctx.fillStyle = '#ff4dff';
-      this.ctx.font = 'bold 64px Courier New';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText(
-        'TARGET ELIMINATED',
-        this.canvas.width / 2,
-        this.canvas.height / 2
-      );
     }
   }
 }

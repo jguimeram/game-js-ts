@@ -18,6 +18,13 @@ export class Player extends Entity {
   public blinkFrames: number = 0;
   public scale: Vector = new Vector(1, 1);
 
+  public activeSkill: number = 1; // 1: Strike, 2: Repair
+  public isHealing: boolean = false;
+  public healingCooldown: number = 0;
+  public maxHealingCooldown: number = 15;
+  private healingTicks: number = 0;
+  private healingTimer: number = 0;
+
   public dashTimer: number = 0;
   public dashCooldown: number = 0;
   public isDashing: boolean = false;
@@ -94,6 +101,30 @@ export class Player extends Entity {
     if (this.dashIFrame > 0) this.dashIFrame -= dt;
     if (this.blinkFrames > 0) this.blinkFrames -= dt;
 
+    // Healing logic
+    if (this.activeSkill === 2 && this.lifespan < this.maxLifespan && this.healingCooldown <= 0) {
+      this.isHealing = true;
+      this.healingTimer += dt;
+      if (this.healingTimer >= 0.5 && this.healingTicks < 10) {
+        this.lifespan = Math.min(this.maxLifespan, this.lifespan + 1);
+        this.healingTicks++;
+        this.healingTimer = 0;
+        
+        if (this.healingTicks >= 10) {
+            this.healingCooldown = this.maxHealingCooldown;
+            this.isHealing = false;
+        }
+      }
+    } else {
+      this.isHealing = false;
+      this.healingTicks = 0;
+      this.healingTimer = 0;
+    }
+
+    if (this.healingCooldown > 0) {
+        this.healingCooldown -= dt;
+    }
+
     // Boundary checks
     if (this.pos.x < this.radius) {
       this.pos.x = this.radius;
@@ -112,7 +143,7 @@ export class Player extends Entity {
       this.vel.y *= -0.5;
     }
 
-    if (keys['Space'] && this.shootCooldown <= 0) {
+    if (keys['Space'] && this.shootCooldown <= 0 && this.activeSkill === 1) {
       const dir = Vector.sub(mousePos, this.pos).normalize();
       this.bullets.push(
         new Bullet(
