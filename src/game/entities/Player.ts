@@ -53,6 +53,7 @@ export class Player extends Entity {
   update(
     dt: number,
     keys: Record<string, boolean>,
+    mousePos: Vector,
     particles: ParticleSystem,
     canvasWidth: number,
     canvasHeight: number
@@ -112,10 +113,11 @@ export class Player extends Entity {
     }
 
     if (keys['Space'] && this.shootCooldown <= 0) {
+      const dir = Vector.sub(mousePos, this.pos).normalize();
       this.bullets.push(
         new Bullet(
-          new Vector(this.pos.x, this.pos.y - this.radius),
-          new Vector(0, -1000)
+          this.pos.copy().add(dir.copy().mult(this.radius)),
+          dir.mult(1000)
         )
       );
       this.shootCooldown = 0.12;
@@ -131,7 +133,14 @@ export class Player extends Entity {
       const b = this.bullets[i];
       if (!b) continue;
       b.update(dt);
-      if (b.pos.y < -100) this.bullets.splice(i, 1);
+      if (
+        b.pos.x < -100 ||
+        b.pos.x > canvasWidth + 100 ||
+        b.pos.y < -100 ||
+        b.pos.y > canvasHeight + 100
+      ) {
+        this.bullets.splice(i, 1);
+      }
     }
 
     if (this.isDashing && Math.random() > 0.5) {

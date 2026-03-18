@@ -35,6 +35,12 @@ export class Camera {
     ctx.translate(this.offset.x, this.offset.y);
   }
 
+  screenToWorld(mx: number, my: number, width: number, height: number): Vector {
+    const wx = (mx - width / 2 - this.offset.x) / this.zoom + width / 2;
+    const wy = (my - height / 2 - this.offset.y) / this.zoom + height / 2;
+    return new Vector(wx, wy);
+  }
+
   drawFlash(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     if (this.flash > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${this.flash * 2})`;

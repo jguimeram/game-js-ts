@@ -55,6 +55,7 @@ describe('Game Initialization and Logic', () => {
 
     // Let's mock a key press
     (game as any).keys['ArrowUp'] = true;
+    const mousePos = new Vector(0, 0);
     // @ts-ignore
     game.update(0.1, 0.1);
 

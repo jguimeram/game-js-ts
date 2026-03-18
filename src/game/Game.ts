@@ -1,8 +1,10 @@
 import { Player } from './entities/Player';
 import { Boss, BossState } from './entities/Boss';
+import { Minion } from './entities/Minion';
 import { ParticleSystem } from '../engine/ParticleSystem';
 import { Camera } from '../engine/Camera';
 import { DamageNumber } from '../engine/DamageNumber';
+import { Vector } from '../engine/Vector';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -12,9 +14,12 @@ export class Game {
 
   private player: Player;
   private boss: Boss;
+  private minions: Minion[] = [];
   private particles: ParticleSystem;
   private camera: Camera;
   private damageNumbers: DamageNumber[] = [];
+  private minionsSpawnedForCurrentThreshold: boolean = false;
+  private mousePos: Vector = new Vector(0, 0);
 
   private keys: Record<string, boolean> = {};
   private lastTime: number = 0;
@@ -47,6 +52,14 @@ export class Game {
     });
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
+    });
+    window.addEventListener('mousemove', (e) => {
+      this.mousePos = this.camera.screenToWorld(
+        e.clientX,
+        e.clientY,
+        this.canvas.width,
+        this.canvas.height
+      );
     });
   }
 
@@ -83,6 +96,7 @@ export class Game {
     this.player.update(
       dt,
       this.keys,
+      this.mousePos,
       this.particles,
       this.canvas.width,
       this.canvas.height
@@ -94,6 +108,34 @@ export class Game {
       this.canvas.width,
       this.canvas.height
     );
+
+    // Minion staging logic
+    if (this.boss.state === BossState.STAGING && !this.minionsSpawnedForCurrentThreshold) {
+      // Spawn 3 minions
+      for (let i = 0; i < 3; i++) {
+        const x = Math.random() * this.canvas.width;
+        const y = 100 + Math.random() * (this.canvas.height / 2);
+        this.minions.push(new Minion(new Vector(x, y), this.player));
+        this.particles.emit(new Vector(x, y), '#7a4dff', 10);
+      }
+      this.minionsSpawnedForCurrentThreshold = true;
+    }
+
+    // Update minions and their bullets
+    for (let i = this.minions.length - 1; i >= 0; i--) {
+      const m = this.minions[i];
+      m.update(dt, this.particles, this.canvas.width, this.canvas.height);
+
+      if (m.health <= 0) {
+        this.particles.emit(m.pos, '#7a4dff', 20);
+        this.minions.splice(i, 1);
+        if (this.minions.length === 0) {
+          this.boss.state = BossState.IDLE;
+          this.minionsSpawnedForCurrentThreshold = false;
+        }
+      }
+    }
+
     this.particles.update(dt);
     this.camera.update(dtReal);
 
@@ -118,7 +160,7 @@ export class Game {
     for (let i = this.player.bullets.length - 1; i >= 0; i--) {
       const b = this.player.bullets[i];
       if (!b) continue;
-      if (b.checkCollision(this.boss)) {
+      if (this.boss.state !== BossState.STAGING && b.checkCollision(this.boss)) {
         this.boss.health -= 8;
         this.boss.blinkFrames = 0.05;
         this.boss.scale.x = 1.1;
@@ -127,11 +169,39 @@ export class Game {
         this.damageNumbers.push(new DamageNumber(b.pos, '8', 'white', 32));
         this.player.bullets.splice(i, 1);
         this.camera.shake(1);
+      } else {
+        // Player bullets -> Minions
+        for (let j = this.minions.length - 1; j >= 0; j--) {
+          const m = this.minions[j];
+          if (b.checkCollision(m)) {
+            m.health -= 25;
+            m.blinkFrames = 0.05;
+            this.particles.emit(b.pos, '#7a4dff', 5);
+            this.damageNumbers.push(new DamageNumber(b.pos, '25', '#7a4dff', 24));
+            this.player.bullets.splice(i, 1);
+            break;
+          }
+        }
       }
     }
 
     // Boss attacks -> Player
     if (this.player.dashIFrame <= 0) {
+      // Minion bullets -> Player
+      for (const m of this.minions) {
+        for (let i = m.bullets.length - 1; i >= 0; i--) {
+          const mb = m.bullets[i];
+          if (mb.checkCollision(this.player)) {
+            this.player.lifespan -= 5;
+            this.player.blinkFrames = 0.5;
+            this.particles.emit(mb.pos, '#7a4dff', 5);
+            this.damageNumbers.push(new DamageNumber(mb.pos, '5', '#7a4dff', 20));
+            m.bullets.splice(i, 1);
+            this.camera.shake(2);
+          }
+        }
+      }
+
       for (let i = this.boss.bullets.length - 1; i >= 0; i--) {
         const b = this.boss.bullets[i];
         if (!b) continue;
@@ -195,6 +265,7 @@ export class Game {
     this.particles.draw(this.ctx);
     this.player.draw(this.ctx);
     this.boss.draw(this.ctx);
+    this.minions.forEach((m) => m.draw(this.ctx));
     this.damageNumbers.forEach((d) => d.draw(this.ctx));
 
     this.ctx.restore();

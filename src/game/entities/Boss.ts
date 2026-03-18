@@ -10,6 +10,7 @@ export enum BossState {
   IDLE = 'IDLE',
   TELEGRAPH = 'TELEGRAPH',
   SURGE = 'SURGE',
+  STAGING = 'STAGING',
 }
 
 export class Boss extends Entity {
@@ -23,6 +24,7 @@ export class Boss extends Entity {
   public blinkFrames: number = 0;
   public time: number = 0;
   public scale: Vector = new Vector(1, 1);
+  public thresholdsReached: Set<number> = new Set();
 
   public state: BossState = BossState.IDLE;
   public stateTimer: number = 0;
@@ -47,8 +49,12 @@ export class Boss extends Entity {
   ): void {
     this.time += dt;
     this.updatePhase(particles, camera);
+    this.checkHealthThresholds();
 
-    if (this.state !== BossState.SURGE) {
+    const hpPercent = this.health / this.maxHealth;
+    const isLastStand = hpPercent <= 0.25;
+
+    if (this.state !== BossState.SURGE && (this.state !== BossState.STAGING || isLastStand)) {
       const hoverX = Math.sin(this.time * 0.7) * (this.phase === 3 ? 400 : 200);
       const hoverY = Math.cos(this.time * 1.1) * 60;
       this.targetPos.x = canvasWidth / 2 + hoverX;
@@ -56,6 +62,12 @@ export class Boss extends Entity {
 
       this.pos.x += (this.targetPos.x - this.pos.x) * 1.5 * dt;
       this.pos.y += (this.targetPos.y - this.pos.y) * 1.5 * dt;
+    } else if (this.state === BossState.STAGING) {
+      // Stay on top right corner for 75% and 50% thresholds
+      this.targetPos.x = canvasWidth - 150;
+      this.targetPos.y = 150;
+      this.pos.x += (this.targetPos.x - this.pos.x) * 2 * dt;
+      this.pos.y += (this.targetPos.y - this.pos.y) * 2 * dt;
     }
 
     if (this.blinkFrames > 0) this.blinkFrames -= dt;
@@ -89,6 +101,16 @@ export class Boss extends Entity {
           this.scale.y = 0.7;
         }
         break;
+      case BossState.STAGING:
+          if (isLastStand) {
+            // At 25%, the boss also attacks while minions are out
+            this.attackTimer += dt;
+            if (this.attackTimer > 2.0) { // Slightly slower attacks during last stand adds
+              this.decideNextAttack();
+              this.attackTimer = 0;
+            }
+          }
+          break;
     }
 
     this.scale.x += (1 - this.scale.x) * 5 * dt;
@@ -122,6 +144,16 @@ export class Boss extends Entity {
       this.scale.mult(2);
       particles.emit(this.pos, '#4d4dff', 30, [200, 500]);
     }
+  }
+
+  checkHealthThresholds(): void {
+    const hpPercent = this.health / this.maxHealth;
+    [0.75, 0.5, 0.25].forEach((t) => {
+      if (hpPercent <= t && !this.thresholdsReached.has(t)) {
+        this.thresholdsReached.add(t);
+        this.state = BossState.STAGING;
+      }
+    });
   }
 
   decideNextAttack(): void {
@@ -206,6 +238,17 @@ export class Boss extends Entity {
       ctx.strokeStyle = this.telegraphColor;
       ctx.lineWidth = 4;
       ctx.stroke();
+      ctx.closePath();
+    }
+
+    if (this.state === BossState.STAGING && hpPercent > 0.25) {
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 30, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 10;
+      ctx.setLineDash([15, 10]);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.closePath();
     }
 
