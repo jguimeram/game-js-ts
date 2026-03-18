@@ -2,6 +2,7 @@ import { Player } from './entities/Player';
 import { Boss, BossState } from './entities/Boss';
 import { ParticleSystem } from '../engine/ParticleSystem';
 import { Camera } from '../engine/Camera';
+import { DamageNumber } from '../engine/DamageNumber';
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -13,6 +14,7 @@ export class Game {
   private boss: Boss;
   private particles: ParticleSystem;
   private camera: Camera;
+  private damageNumbers: DamageNumber[] = [];
 
   private keys: Record<string, boolean> = {};
   private lastTime: number = 0;
@@ -95,6 +97,11 @@ export class Game {
     this.particles.update(dt);
     this.camera.update(dtReal);
 
+    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+      this.damageNumbers[i].update(dt);
+      if (this.damageNumbers[i].life <= 0) this.damageNumbers.splice(i, 1);
+    }
+
     this.updateCameraZoom();
     this.checkCollisions(dtReal);
     this.updateHUD();
@@ -117,6 +124,7 @@ export class Game {
         this.boss.scale.x = 1.1;
         this.boss.scale.y = 0.9;
         this.particles.emit(b.pos, 'white', 5);
+        this.damageNumbers.push(new DamageNumber(b.pos, '8', 'white', 32));
         this.player.bullets.splice(i, 1);
         this.camera.shake(1);
       }
@@ -131,6 +139,7 @@ export class Game {
           this.player.lifespan -= 10;
           this.player.blinkFrames = 0.5;
           this.particles.emit(b.pos, '#4d4dff', 10);
+          this.damageNumbers.push(new DamageNumber(b.pos, '10', '#4d4dff', 24));
           this.boss.bullets.splice(i, 1);
           this.camera.shake(10);
           this.hitStopTimer = 0.05;
@@ -144,6 +153,7 @@ export class Game {
           this.player.lifespan -= 15;
           this.player.blinkFrames = 0.5;
           this.particles.emit(m.pos, '#ff9900', 15);
+          this.damageNumbers.push(new DamageNumber(m.pos, '15', '#ff9900', 28));
           this.boss.missiles.splice(i, 1);
           this.camera.shake(15);
           this.hitStopTimer = 0.08;
@@ -185,6 +195,7 @@ export class Game {
     this.particles.draw(this.ctx);
     this.player.draw(this.ctx);
     this.boss.draw(this.ctx);
+    this.damageNumbers.forEach((d) => d.draw(this.ctx));
 
     this.ctx.restore();
 
