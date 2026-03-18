@@ -9,6 +9,9 @@
 <body>
     <div id="hud">
         <div class="stat">Lifespan: <div id="lifespan-container"><div id="lifespan-bar"></div></div></div>
+        <div id="shooter-hud" style="display: none;">
+            <div class="stat">Shooter: <div id="lifespan-container"><div id="shooter-lifespan-bar"></div></div></div>
+        </div>
         <div class="stat">Boss Health: <span id="boss-health">1000</span></div>
         <div class="stat">Time: <span id="game-timer">00:00</span></div>
     </div>
@@ -44,7 +47,8 @@
         <div id="menu-box">
             <h1>STRIKER v1.0</h1>
             <p>Select Operation Mode</p>
-            <button id="btn-game" class="menu-btn">GAME MODE</button>
+            <button id="btn-game" class="menu-btn">STRIKER MODE</button>
+            <button id="btn-healer" class="menu-btn secondary">HEALER MODE</button>
             <button id="btn-debug" class="menu-btn secondary">DEBUG MODE</button>
             <div class="controls">
                 WASD Move | MOUSE Aim | SPACE Shoot | SHIFT Dash | 1-3 Skills

@@ -17,7 +17,7 @@ export class Minion extends Entity {
     super(pos, 25);
   }
 
-  update(dt: number, particles: ParticleSystem, canvasWidth: number, canvasHeight: number): void {
+  update(dt: number, _particles: ParticleSystem, canvasWidth: number, canvasHeight: number): void {
     // Move towards player slowly but stay at some distance
     const toPlayer = Vector.sub(this.player.pos, this.pos);
     const dist = toPlayer.mag();

@@ -132,9 +132,23 @@ body {
     font-size: 12px;
 }
 
-#lifespan-bar.healing {
+#shooter-lifespan-bar {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #4d4dff, #8080ff);
+    transition: width 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 0 10px #4d4dff;
+}
+
+#shooter-lifespan-bar.healing {
     background: linear-gradient(90deg, #00ff00, #a0ffa0);
     box-shadow: 0 0 15px #00ff00;
+}
+
+#shooter-hud {
+    margin: 10px 0;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
 #game-timer {

@@ -40,4 +40,12 @@ export class Vector {
   static dist(v1: Vector, v2: Vector): number {
     return Math.sqrt((v1.x - v2.x) ** 2 + (v1.y - v2.y) ** 2);
   }
+
+  static distSq(v1: Vector, v2: Vector): number {
+    return (v1.x - v2.x) ** 2 + (v1.y - v2.y) ** 2;
+  }
+
+  static add(v1: Vector, v2: Vector): Vector {
+    return new Vector(v1.x + v2.x, v1.y + v2.y);
+  }
 }
