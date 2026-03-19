@@ -12,9 +12,13 @@ export class Minion extends Entity {
   public shootTimer: number = Math.random() * 2;
   public bullets: Bullet[] = [];
   public blinkFrames: number = 0;
+  public difficultyMultiplier: number = 1.0;
 
-  constructor(pos: Vector, private player: Player) {
+  constructor(pos: Vector, private player: Player, difficultyMultiplier: number = 1.0) {
     super(pos, 25);
+    this.difficultyMultiplier = difficultyMultiplier;
+    this.maxHealth = 50 * difficultyMultiplier;
+    this.health = this.maxHealth;
   }
 
   update(dt: number, _particles: ParticleSystem, canvasWidth: number, canvasHeight: number): void {
@@ -39,7 +43,7 @@ export class Minion extends Entity {
     if (this.shootTimer <= 0) {
       const dir = Vector.sub(this.player.pos, this.pos).normalize();
       this.bullets.push(new Bullet(this.pos.copy(), dir.mult(400), '#7a4dff', 6));
-      this.shootTimer = 2 + Math.random() * 2;
+      this.shootTimer = (2 + Math.random() * 2) / this.difficultyMultiplier;
     }
 
     // Update bullets

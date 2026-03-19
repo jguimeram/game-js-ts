@@ -34,6 +34,7 @@ export class Boss extends Entity {
   public telegraphColor: string = 'white';
   private pendingAttack: string = '';
   public isFullyDestroyed: boolean = false;
+  public difficultyMultiplier: number = 1.0;
 
   public takeDamage(amount: number): void {
     if (this.state === BossState.DYING) return;
@@ -43,10 +44,14 @@ export class Boss extends Entity {
 
   constructor(
     private player: Player,
-    canvasWidth: number
+    canvasWidth: number,
+    difficultyMultiplier: number = 1.0
   ) {
     super(new Vector(canvasWidth / 2, -150), 90);
     this.targetPos = new Vector(canvasWidth / 2, 200);
+    this.difficultyMultiplier = difficultyMultiplier;
+    this.maxHealth = 1000 * difficultyMultiplier;
+    this.health = this.maxHealth;
   }
 
   update(
@@ -99,7 +104,8 @@ export class Boss extends Entity {
     switch (this.state) {
       case BossState.IDLE:
         this.attackTimer += dt;
-        const attackThreshold = this.phase === 3 ? 1.5 : 2.5;
+        const baseThreshold = this.phase === 3 ? 1.5 : 2.5;
+        const attackThreshold = baseThreshold / this.difficultyMultiplier;
         if (this.attackTimer > attackThreshold) {
           this.decideNextAttack();
           this.attackTimer = 0;

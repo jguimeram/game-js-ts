@@ -1,6 +1,7 @@
 import { Game, GameMode } from './game/Game';
 
 function startGame(debug: boolean, mode: GameMode = GameMode.NORMAL) {
+    console.log("Starting game with mode:", mode);
     const menu = document.getElementById('menu-overlay');
     if (menu) menu.style.display = 'none';
     
@@ -14,7 +15,10 @@ function init() {
     const btnDebug = document.getElementById('btn-debug');
 
     btnGame?.addEventListener('click', () => startGame(false, GameMode.NORMAL));
-    btnHealer?.addEventListener('click', () => startGame(false, GameMode.HEALER));
+    btnHealer?.addEventListener('click', () => {
+        console.log("Healer button clicked");
+        startGame(false, GameMode.HEALER);
+    });
     btnDebug?.addEventListener('click', () => startGame(true, GameMode.NORMAL));
 }
 

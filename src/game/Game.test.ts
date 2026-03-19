@@ -9,7 +9,24 @@ describe('Game Initialization and Logic', () => {
     document.body.innerHTML = `
       <div id="hud">
         <div id="lifespan-container"><div id="lifespan-bar"></div></div>
+        <div id="shooter-hud" style="display: none;">
+            <div id="shooter-lifespan-bar"></div>
+        </div>
         <div id="boss-health">1000</div>
+        <div id="game-timer">00:00</div>
+      </div>
+      <div id="skills-hud">
+        <div id="skill-1"><span class="key">1</span> STRIKE <div class="cooldown-overlay"></div></div>
+        <div id="skill-2"><span class="key">2</span> MAGIC <div class="cooldown-overlay"></div><span class="cooldown-timer"></span></div>
+        <div id="skill-3"><span class="key">3</span> REPAIR <div class="cooldown-overlay"></div><span class="cooldown-timer"></span></div>
+      </div>
+      <div id="debug-tooltip"></div>
+      <div id="game-over-overlay" style="display: none;">
+        <div id="game-over-title"></div>
+        <div id="stat-time"></div>
+        <div id="stat-lifespan"></div>
+        <div id="stat-damage"></div>
+        <button id="btn-reset"></button>
       </div>
       <canvas id="gameCanvas"></canvas>
     `;
@@ -30,6 +47,9 @@ describe('Game Initialization and Logic', () => {
       clearRect: vi.fn(),
       fillText: vi.fn(),
       closePath: vi.fn(),
+      createRadialGradient: vi.fn().mockReturnValue({
+        addColorStop: vi.fn(),
+      }),
     });
 
     game = new Game(true);
@@ -101,5 +121,18 @@ describe('Game Initialization and Logic', () => {
 
     expect(secondTime - firstTime).toBeGreaterThan(0);
     expect(secondTime - firstTime).toBeLessThan(5000); // Relaxed for tests
+  });
+
+  it('should initialize and update correctly in HEALER mode', () => {
+    // @ts-ignore
+    const gameHealer = new Game(false, 'HEALER');
+    expect((gameHealer as any).healer).toBeDefined();
+    expect((gameHealer as any).shooterAI).toBeDefined();
+    
+    // @ts-ignore
+    gameHealer.shooterAI.updateAI(0.1, gameHealer.boss, gameHealer.minions, gameHealer.particles, gameHealer.camera, 1920, 1080);
+    
+    // @ts-ignore
+    gameHealer.draw();
   });
 });

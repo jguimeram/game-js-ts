@@ -15,18 +15,32 @@ export class ShooterAI extends Player {
   updateAI(
     dt: number,
     boss: Boss,
+    minions: any[],
     particles: ParticleSystem,
     camera: Camera,
     canvasWidth: number,
     canvasHeight: number
   ): void {
     const fakeKeys: Record<string, boolean> = {};
-    const mousePos = boss.pos.copy();
+    
+    // 1. Target Selection (Nearest Minion or Boss)
+    let currentTarget: any = boss;
+    let minDist = Vector.dist(this.pos, boss.pos);
 
-    // 1. Steering: Maintain distance from boss
-    const toBoss = Vector.sub(boss.pos, this.pos);
-    const dist = toBoss.mag();
-    const dir = toBoss.copy().normalize();
+    for (const m of minions) {
+      const d = Vector.dist(this.pos, m.pos);
+      if (d < minDist) {
+        minDist = d;
+        currentTarget = m;
+      }
+    }
+
+    const mousePos = currentTarget.pos.copy();
+
+    // 2. Steering: Maintain distance from current target
+    const toTarget = Vector.sub(currentTarget.pos, this.pos);
+    const dist = toTarget.mag();
+    const dir = toTarget.copy().normalize();
 
     if (dist > this.targetDist + 50) {
       fakeKeys['KeyW'] = true;
@@ -38,22 +52,22 @@ export class ShooterAI extends Player {
       if (dir.x < -0.2) fakeKeys['KeyD'] = true;
     }
 
-    // 2. Dodging: Check nearby projectiles
+    // 3. Dodging: Check nearby projectiles
     let closestProj: any = null;
-    let minDist = 150;
+    let minProjDist = 150;
 
     for (const b of boss.bullets) {
       const d = Vector.dist(this.pos, b.pos);
-      if (d < minDist) {
-        minDist = d;
+      if (d < minProjDist) {
+        minProjDist = d;
         closestProj = b;
       }
     }
 
     for (const m of boss.missiles) {
       const d = Vector.dist(this.pos, m.pos);
-      if (d < minDist) {
-        minDist = d;
+      if (d < minProjDist) {
+        minProjDist = d;
         closestProj = m;
       }
     }
@@ -67,7 +81,7 @@ export class ShooterAI extends Player {
       if (fleeDir.y < -0.3) fakeKeys['KeyW'] = true;
 
       // Dash if very close
-      if (minDist < 60 && this.dashCooldown <= 0) {
+      if (minProjDist < 60 && this.dashCooldown <= 0) {
         this.dash(fakeKeys, camera);
       }
     }

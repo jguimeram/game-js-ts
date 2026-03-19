@@ -21,6 +21,9 @@ export class HealerPlayer extends Entity {
   public burstHealCooldown: number = 0;
   public maxBurstHealCooldown: number = 10;
   
+  public bullets: any[] = []; // Added to avoid crash in checkCollisions
+  public magicSpells: any[] = []; // Added to avoid crash in checkCollisions
+  public activeSkill: number = 1; // Added to avoid crash in initInput
   public healingTicks: number = 0; // Added to avoid crash in Game.ts
   public dashCooldown: number = 0; // Added for UI
   public dashIFrame: number = 0;
@@ -29,7 +32,7 @@ export class HealerPlayer extends Entity {
     super(new Vector(width / 2, height - 100), 15);
   }
 
-  dash(): void {
+  dash(keys: Record<string, boolean>, camera: any): void {
     // Healer doesn't have dash yet, but method must exist to avoid crash
   }
 

@@ -43,6 +43,7 @@ export class Game {
   private totalDamageDealt: number = 0;
   private gameRunning: boolean = false;
   private mode: GameMode = GameMode.NORMAL;
+  private difficultyMultiplier: number = 1.0;
 
   private shooterHealthHudEl: HTMLElement | null = null;
   private shooterLifespanBarEl: HTMLElement | null = null;
@@ -67,6 +68,7 @@ export class Game {
   private hitStopTimer: number = 0;
 
   constructor(debugEnabled: boolean = false, mode: GameMode = GameMode.NORMAL) {
+    console.log("Game constructor, mode:", mode);
     this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
     this.lifespanBarEl = document.getElementById('lifespan-bar')!;
@@ -95,6 +97,7 @@ export class Game {
 
     this.debug.enabled = debugEnabled;
     this.mode = mode;
+    this.difficultyMultiplier = this.mode === GameMode.HEALER ? 2.0 : 1.0;
     this.updateDebugTooltip();
 
     this.resize();
@@ -104,11 +107,11 @@ export class Game {
       this.healer = new HealerPlayer(this.canvas.width, this.canvas.height);
       this.shooterAI = new ShooterAI(this.canvas.width, this.canvas.height);
       this.player = this.healer as any; 
-      this.boss = new Boss(this.shooterAI, this.canvas.width);
+      this.boss = new Boss(this.shooterAI, this.canvas.width, this.difficultyMultiplier);
       if (this.shooterHealthHudEl) this.shooterHealthHudEl.style.display = 'block';
     } else {
       this.player = new Player(this.canvas.width, this.canvas.height);
-      this.boss = new Boss(this.player, this.canvas.width);
+      this.boss = new Boss(this.player, this.canvas.width, this.difficultyMultiplier);
       if (this.shooterHealthHudEl) this.shooterHealthHudEl.style.display = 'none';
     }
 
@@ -273,6 +276,7 @@ export class Game {
       this.shooterAI.updateAI(
         isGameOver ? dt * 0.1 : dt,
         this.boss,
+        this.minions,
         this.particles,
         this.camera,
         this.canvas.width,
@@ -335,10 +339,11 @@ export class Game {
 
     // Minion staging logic
     if (!isGameOver && this.boss.state === BossState.STAGING && !this.minionsSpawnedForCurrentThreshold) {
-      for (let i = 0; i < 3; i++) {
+      const minionCount = Math.floor(3 * this.difficultyMultiplier);
+      for (let i = 0; i < minionCount; i++) {
         const x = Math.random() * this.canvas.width;
         const y = 100 + Math.random() * (this.canvas.height / 2);
-        this.minions.push(new Minion(new Vector(x, y), this.player));
+        this.minions.push(new Minion(new Vector(x, y), this.player, this.difficultyMultiplier));
         this.particles.emit(new Vector(x, y), '#7a4dff', 10);
       }
       this.minionsSpawnedForCurrentThreshold = true;
@@ -397,63 +402,67 @@ export class Game {
 
     for (const s of shooters) {
       // Player/Shooter bullets -> Boss
-      for (let i = s.bullets.length - 1; i >= 0; i--) {
-        const b = s.bullets[i];
-        if (!b) continue;
-        if (this.boss.state !== BossState.STAGING && b.checkCollision(this.boss)) {
-          const damage = 8;
-          this.boss.takeDamage(damage);
-          this.totalDamageDealt += damage;
-          this.boss.scale.x = 1.1;
-          this.boss.scale.y = 0.9;
-          this.particles.emit(b.pos, 'white', 5);
-          this.damageNumbers.push(new DamageNumber(b.pos, '8', 'white', 32));
-          s.bullets.splice(i, 1);
-          this.camera.shake(1);
-        } else {
-          // Player/Shooter bullets -> Minions
-          for (let j = this.minions.length - 1; j >= 0; j--) {
-            const m = this.minions[j];
-            if (b.checkCollision(m)) {
-              const damage = 25;
-              m.health -= damage;
-              this.totalDamageDealt += damage;
-              m.blinkFrames = 0.05;
-              this.particles.emit(b.pos, '#7a4dff', 5);
-              this.damageNumbers.push(new DamageNumber(b.pos, '25', '#7a4dff', 24));
-              s.bullets.splice(i, 1);
-              break;
+      if (s.bullets) {
+        for (let i = s.bullets.length - 1; i >= 0; i--) {
+          const b = s.bullets[i];
+          if (!b) continue;
+          if (this.boss.state !== BossState.STAGING && b.checkCollision(this.boss)) {
+            const damage = 8;
+            this.boss.takeDamage(damage);
+            this.totalDamageDealt += damage;
+            this.boss.scale.x = 1.1;
+            this.boss.scale.y = 0.9;
+            this.particles.emit(b.pos, 'white', 5);
+            this.damageNumbers.push(new DamageNumber(b.pos, '8', 'white', 32));
+            s.bullets.splice(i, 1);
+            this.camera.shake(1);
+          } else {
+            // Player/Shooter bullets -> Minions
+            for (let j = this.minions.length - 1; j >= 0; j--) {
+              const m = this.minions[j];
+              if (b.checkCollision(m)) {
+                const damage = 25;
+                m.health -= damage;
+                this.totalDamageDealt += damage;
+                m.blinkFrames = 0.05;
+                this.particles.emit(b.pos, '#7a4dff', 5);
+                this.damageNumbers.push(new DamageNumber(b.pos, '25', '#7a4dff', 24));
+                s.bullets.splice(i, 1);
+                break;
+              }
             }
           }
         }
       }
 
       // Player/Shooter magic spells -> Boss/Minions
-      for (let i = s.magicSpells.length - 1; i >= 0; i--) {
-        const ms = s.magicSpells[i];
-        if (!ms) continue;
-        if (this.boss.state !== BossState.STAGING && ms.checkCollision(this.boss)) {
-          const damage = 25;
-          this.boss.takeDamage(damage);
-          this.totalDamageDealt += damage;
-          this.boss.scale.x = 1.3;
-          this.boss.scale.y = 0.7;
-          this.particles.emit(ms.pos, '#ff4dff', 20);
-          this.damageNumbers.push(new DamageNumber(ms.pos, '25', '#ff4dff', 48));
-          s.magicSpells.splice(i, 1);
-          this.camera.shake(10);
-        } else {
-          for (let j = this.minions.length - 1; j >= 0; j--) {
-            const m = this.minions[j];
-            if (ms.checkCollision(m)) {
-              const damage = 25;
-              m.health -= damage;
-              this.totalDamageDealt += damage;
-              m.blinkFrames = 0.05;
-              this.particles.emit(ms.pos, '#ff4dff', 15);
-              this.damageNumbers.push(new DamageNumber(ms.pos, '25', '#ff4dff', 32));
-              s.magicSpells.splice(i, 1);
-              break;
+      if (s.magicSpells) {
+        for (let i = s.magicSpells.length - 1; i >= 0; i--) {
+          const ms = s.magicSpells[i];
+          if (!ms) continue;
+          if (this.boss.state !== BossState.STAGING && ms.checkCollision(this.boss)) {
+            const damage = 25;
+            this.boss.takeDamage(damage);
+            this.totalDamageDealt += damage;
+            this.boss.scale.x = 1.3;
+            this.boss.scale.y = 0.7;
+            this.particles.emit(ms.pos, '#ff4dff', 20);
+            this.damageNumbers.push(new DamageNumber(ms.pos, '25', '#ff4dff', 48));
+            s.magicSpells.splice(i, 1);
+            this.camera.shake(10);
+          } else {
+            for (let j = this.minions.length - 1; j >= 0; j--) {
+              const m = this.minions[j];
+              if (ms.checkCollision(m)) {
+                const damage = 25;
+                m.health -= damage;
+                this.totalDamageDealt += damage;
+                m.blinkFrames = 0.05;
+                this.particles.emit(ms.pos, '#ff4dff', 15);
+                this.damageNumbers.push(new DamageNumber(ms.pos, '25', '#ff4dff', 32));
+                s.magicSpells.splice(i, 1);
+                break;
+              }
             }
           }
         }
@@ -472,10 +481,11 @@ export class Game {
         for (let i = m.bullets.length - 1; i >= 0; i--) {
           const mb = m.bullets[i];
           if (mb.checkCollision(target)) {
-            target.lifespan -= 5;
+            const damage = 5 * this.difficultyMultiplier;
+            target.lifespan -= damage;
             target.blinkFrames = 0.5;
             this.particles.emit(mb.pos, '#7a4dff', 5);
-            this.damageNumbers.push(new DamageNumber(mb.pos, '5', '#7a4dff', 20));
+            this.damageNumbers.push(new DamageNumber(mb.pos, Math.floor(damage).toString(), '#7a4dff', 20));
             m.bullets.splice(i, 1);
             this.camera.shake(2);
           }
@@ -486,10 +496,11 @@ export class Game {
         const b = this.boss.bullets[i];
         if (!b) continue;
         if (b.checkCollision(target)) {
-          target.lifespan -= 10;
+          const damage = 10 * this.difficultyMultiplier;
+          target.lifespan -= damage;
           target.blinkFrames = 0.5;
           this.particles.emit(b.pos, '#4d4dff', 10);
-          this.damageNumbers.push(new DamageNumber(b.pos, '10', '#4d4dff', 24));
+          this.damageNumbers.push(new DamageNumber(b.pos, Math.floor(damage).toString(), '#4d4dff', 24));
           this.boss.bullets.splice(i, 1);
           this.camera.shake(10);
           if (target === this.player) this.hitStopTimer = 0.05;
@@ -500,10 +511,11 @@ export class Game {
         const m = this.boss.missiles[i];
         if (!m) continue;
         if (m.checkCollision(target)) {
-          target.lifespan -= 15;
+          const damage = 15 * this.difficultyMultiplier;
+          target.lifespan -= damage;
           target.blinkFrames = 0.5;
           this.particles.emit(m.pos, '#ff9900', 15);
-          this.damageNumbers.push(new DamageNumber(m.pos, '15', '#ff9900', 28));
+          this.damageNumbers.push(new DamageNumber(m.pos, Math.floor(damage).toString(), '#ff9900', 28));
           this.boss.missiles.splice(i, 1);
           this.camera.shake(15);
           if (target === this.player) this.hitStopTimer = 0.08;
@@ -513,17 +525,18 @@ export class Game {
       // Damage areas -> target
       for (const da of this.damageAreas) {
         if (da.isActive() && !da.hasDealtDamage && da.checkCollision(target)) {
-          target.lifespan -= 20;
+          const damage = 20 * this.difficultyMultiplier;
+          target.lifespan -= damage;
           target.blinkFrames = 0.5;
           this.particles.emit(target.pos, '#ff4d4d', 20);
-          this.damageNumbers.push(new DamageNumber(target.pos, '20', '#ff4d4d', 32));
+          this.damageNumbers.push(new DamageNumber(target.pos, Math.floor(damage).toString(), '#ff4d4d', 32));
           this.camera.shake(10);
           da.hasDealtDamage = true;
         }
       }
 
       if (target.checkCollision(this.boss)) {
-        target.lifespan -= 30 * dtReal;
+        target.lifespan -= 30 * dtReal * this.difficultyMultiplier;
         if (target.blinkFrames <= 0) {
           target.blinkFrames = 0.1;
           this.camera.shake(5);
@@ -556,7 +569,7 @@ export class Game {
     const lifespanPercent = this.debug.godMode ? 100 : (this.player.lifespan / this.player.maxLifespan) * 100;
     this.lifespanBarEl.style.width = Math.max(0, lifespanPercent) + '%';
     
-    const isHealing = this.mode === GameMode.HEALER ? false : this.player.isHealing;
+    const isHealing = this.mode === GameMode.HEALER ? false : (this.player as any).isHealing;
     
     if (isHealing) {
         this.lifespanBarEl.classList.add('healing');
@@ -566,6 +579,21 @@ export class Game {
         this.skill3El.classList.remove('healing');
     }
 
+    const setSkillText = (el: HTMLElement, key: string, label: string) => {
+        const keyEl = el.querySelector('.key');
+        if (keyEl) keyEl.textContent = key;
+        
+        // Find the text node that contains the label
+        for (let i = 0; i < el.childNodes.length; i++) {
+            const node = el.childNodes[i];
+            // Node.TEXT_NODE is 3
+            if (node.nodeType === 3 && node.textContent?.trim().length) {
+                node.textContent = ' ' + label;
+                break;
+            }
+        }
+    };
+
     if (this.mode === GameMode.HEALER && this.healer && this.shooterAI) {
       const shooterLifespanPercent = (this.shooterAI.lifespan / this.shooterAI.maxLifespan) * 100;
       if (this.shooterLifespanBarEl) {
@@ -573,8 +601,6 @@ export class Game {
         this.shooterLifespanBarEl.classList.toggle('healing', this.healer.rayHittingShooter);
       }
 
-      this.skill1El.classList.toggle('active', true); // Ray is always selected in healer mode? Or based on keys. 
-      // User said skill 1 is space, skill 2 is num2.
       this.skill1El.classList.toggle('active', this.healer.rayActive);
       this.skill2El.classList.toggle('active', true);
       this.skill3El.style.display = 'none';
@@ -586,35 +612,31 @@ export class Game {
           ? Math.ceil(this.healer.burstHealCooldown).toString() 
           : '';
           
-      this.skill1El.querySelector('.key')!.textContent = 'SPACE';
-      this.skill1El.childNodes[2].textContent = ' HEAL RAY';
-      this.skill2El.querySelector('.key')!.textContent = '2';
-      this.skill2El.childNodes[2].textContent = ' BURST HEAL';
-
+      setSkillText(this.skill1El, 'SPACE', 'HEAL RAY');
+      setSkillText(this.skill2El, '2', 'BURST HEAL');
     } else {
-      this.skill1El.classList.toggle('active', this.player.activeSkill === 1);
-      this.skill2El.classList.toggle('active', this.player.activeSkill === 2);
-      this.skill3El.classList.toggle('active', this.player.activeSkill === 3);
+      const p = this.player as any;
+      this.skill1El.classList.toggle('active', p.activeSkill === 1);
+      this.skill2El.classList.toggle('active', p.activeSkill === 2);
+      this.skill3El.classList.toggle('active', p.activeSkill === 3);
       this.skill3El.style.display = 'block';
 
       // Skill 2 (Magic) Cooldown
-      const magicCdPercent = (this.player.magicSkillCooldown / this.player.maxMagicSkillCooldown) * 100;
+      const magicCdPercent = (p.magicSkillCooldown / p.maxMagicSkillCooldown) * 100;
       this.skill2CooldownEl.style.height = `${magicCdPercent}%`;
-      this.skill2CooldownTimerEl.textContent = this.player.magicSkillCooldown > 0 
-          ? Math.ceil(this.player.magicSkillCooldown).toString() 
+      this.skill2CooldownTimerEl.textContent = p.magicSkillCooldown > 0 
+          ? Math.ceil(p.magicSkillCooldown).toString() 
           : '';
 
       // Skill 3 (Repair) Cooldown
-      const repairCdPercent = (this.player.healingCooldown / this.player.maxHealingCooldown) * 100;
+      const repairCdPercent = (p.healingCooldown / p.maxHealingCooldown) * 100;
       this.skill3CooldownEl.style.height = `${repairCdPercent}%`;
-      this.skill3CooldownTimerEl.textContent = this.player.healingCooldown > 0 
-          ? Math.ceil(this.player.healingCooldown).toString() 
+      this.skill3CooldownTimerEl.textContent = p.healingCooldown > 0 
+          ? Math.ceil(p.healingCooldown).toString() 
           : '';
 
-      this.skill1El.querySelector('.key')!.textContent = '1';
-      this.skill1El.childNodes[2].textContent = ' STRIKE';
-      this.skill2El.querySelector('.key')!.textContent = '2';
-      this.skill2El.childNodes[2].textContent = ' MAGIC';
+      setSkillText(this.skill1El, '1', 'STRIKE');
+      setSkillText(this.skill2El, '2', 'MAGIC');
     }
 
     this.bossHealthEl.textContent = Math.max(

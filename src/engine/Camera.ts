@@ -36,8 +36,8 @@ export class Camera {
   }
 
   screenToWorld(mx: number, my: number, width: number, height: number): Vector {
-    const wx = (mx - width / 2 - this.offset.x) / this.zoom + width / 2;
-    const wy = (my - height / 2 - this.offset.y) / this.zoom + height / 2;
+    const wx = (mx - width / 2) / this.zoom + width / 2 - this.offset.x;
+    const wy = (my - height / 2) / this.zoom + height / 2 - this.offset.y;
     return new Vector(wx, wy);
   }
 
